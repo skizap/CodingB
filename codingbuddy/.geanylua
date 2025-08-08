@@ -1,0 +1,8 @@
+-- GeanyLua plugin loader stub to call main.init()
+local ok, mod = pcall(require, 'codingbuddy.main')
+if ok and mod and mod.init then
+  mod.init()
+else
+  geany.message('CodingBuddy: failed to load main module: '..tostring(mod))
+end
+
