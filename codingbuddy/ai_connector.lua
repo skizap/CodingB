@@ -125,15 +125,28 @@ function M.chat(opts)
   end
 
   local function build_payload(p)
+    local default_system = 'You are a helpful coding assistant that produces concise, actionable analysis.'
     if p == 'anthropic' then
       local m = opts.model or cfg.provider_models.anthropic
-      return { model = m, max_tokens = 1024, messages = {
-        { role = 'user', content = opts.prompt or '' }
-      }}
+      local sys = (opts.system ~= nil) and opts.system or default_system
+      local pl = {
+        model = m,
+        max_tokens = opts.max_tokens or 1024,
+        messages = {
+          { role = 'user', content = opts.prompt or '' }
+        },
+      }
+      -- Anthropic system prompt lives at top-level `system` (string or content array)
+      if type(sys) == 'string' or type(sys) == 'table' then pl.system = sys end
+      -- Scaffold for tool use (no runtime yet): pass tools/tool_choice if provided
+      if opts.tools and type(opts.tools) == 'table' then pl.tools = opts.tools end
+      if opts.tool_choice ~= nil then pl.tool_choice = opts.tool_choice end
+      return pl
     else
       local m = opts.model or cfg.provider_models[p] or cfg.task_models.analysis
+      local sys = (opts.system ~= nil) and opts.system or default_system
       return { model = m, messages = {
-        { role = 'system', content = 'You are a helpful coding assistant that produces concise, actionable analysis.' },
+        { role = 'system', content = sys },
         { role = 'user', content = opts.prompt or '' },
       }}
     end
