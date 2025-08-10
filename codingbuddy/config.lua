@@ -3,12 +3,29 @@ local M = {}
 
 local defaults = {
   provider = 'openrouter',
+  fallback_chain = { 'openrouter', 'openai', 'anthropic', 'deepseek' },
   task_models = {
     analysis = 'anthropic/claude-3.5-sonnet',
+  },
+  provider_models = {
+    openrouter = 'anthropic/claude-3.5-sonnet',
+    openai = 'gpt-4o-mini',
+    anthropic = 'claude-3-5-sonnet-latest',
+    deepseek = 'deepseek-chat',
   },
   cache_enabled = false,
   log_enabled = true,
   timeout = 30,
+  cost = {
+    enabled = true,
+    prices_per_1k = {
+      openai = { default_input = 0.003, default_output = 0.006 },
+      anthropic = { default_input = 0.003, default_output = 0.015 },
+      openrouter = { default_input = 0.0, default_output = 0.0 },
+      deepseek = { default_input = 0.002, default_output = 0.002 }
+    },
+    currency = 'USD'
+  }
 }
 
 local function expanduser(path)
@@ -25,13 +42,11 @@ local function read_file(path)
 end
 
 local function parse_json(s)
-  -- minimal JSON parsing via lua's load - expect simple objects only
-  -- For safety, prefer dkjson if available.
+  -- prefer dkjson if available.
   local ok, dkjson = pcall(require, 'dkjson')
   if ok and dkjson then
-    local obj, pos, err = dkjson.decode(s, 1, nil)
+    local obj = dkjson.decode(s, 1, nil)
     if obj then return obj end
-    return nil
   end
   return nil
 end
@@ -40,19 +55,21 @@ local cached
 
 function M.get()
   if cached then return cached end
-  local cfg = {}
   -- load config.json
   local path = expanduser('~/.config/geany/plugins/geanylua/codingbuddy/config.json')
   local s = read_file(path)
   local obj = s and parse_json(s) or {}
 
-  -- merge defaults
+  -- merge defaults (shallow)
   for k,v in pairs(defaults) do
     if obj[k] == nil then obj[k] = v end
   end
 
-  -- env override for key
+  -- env overrides for keys
   obj.openrouter_api_key = os.getenv('OPENROUTER_API_KEY') or obj.openrouter_api_key
+  obj.openai_api_key = os.getenv('OPENAI_API_KEY') or obj.openai_api_key
+  obj.anthropic_api_key = os.getenv('ANTHROPIC_API_KEY') or obj.anthropic_api_key
+  obj.deepseek_api_key = os.getenv('DEEPSEEK_API_KEY') or obj.deepseek_api_key
 
   cached = obj
   return cached
