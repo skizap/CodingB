@@ -1,7 +1,7 @@
 -- dialogs.lua - minimal UI wrappers for GeanyLua
 local M = {}
 
-local geany = geany
+local geany = rawget(_G, 'geany')
 
 function M.alert(title, message)
   if geany and geany.message then

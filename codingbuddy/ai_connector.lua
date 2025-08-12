@@ -2,13 +2,24 @@
 -- Requires: lua-socket; HTTPS recommended (luasec). If luasec is unavailable,
 -- you can proxy via HTTP locally or accept insecure http to a local gateway.
 
-local config = require('codingbuddy.config')
-local utils = require('codingbuddy.utils')
--- local dialogs = require('codingbuddy.dialogs')  -- not used here
+local config = require('config')
+local utils = require('utils')
+-- local dialogs = require('dialogs')  -- not used here
+
+-- Tool registry access (lazy loaded)
+local tool_registry_mod = nil
+local function get_tool_registry()
+  if not tool_registry_mod then
+    tool_registry_mod = require('tools.registry')
+  end
+  return tool_registry_mod.get_registry()
+end
 
 -- Phase 2 additions: multi-provider and fallback
+-- Phase 3 additions: chat interface support with conversation context
 -- Public API:
 --   M.chat({ prompt=..., model=?, provider=? })
+--   M.chat({ messages=..., system=..., provider=? })  -- Chat interface support
 --   Uses config.get() for provider, fallback_chain, and API keys.
 
 local M = {}
@@ -17,9 +28,50 @@ local has_https, https = pcall(require, 'ssl.https')
 local has_http, http = pcall(require, 'socket.http')
 local _, ltn12 = pcall(require, 'ltn12')
 
--- Minimal JSON fallback and helpers (unused helper removed to satisfy lints)
+-- Safe JSON encoder and decoder selection
+local function get_json_encoder()
+  -- Try cjson first (fastest)
+  local ok, cjson = pcall(require, 'cjson')
+  if ok and cjson and cjson.encode then
+    return cjson.encode
+  end
+  
+  -- Try dkjson next (most compatible)
+  local ok2, dkjson = pcall(require, 'dkjson')
+  if ok2 and dkjson and dkjson.encode then
+    return function(x) return dkjson.encode(x) end
+  end
+  
+  -- Try our bundled JSON module
+  local ok3, pj = pcall(require, 'codingbuddy.json')
+  if ok3 and pj and pj.encode then
+    return pj.encode
+  end
+  
+  error('No JSON encoder available. Please install dkjson: sudo luarocks install dkjson')
+end
 
-
+local function get_json_decoder()
+  -- Try cjson first (fastest)
+  local ok, cjson = pcall(require, 'cjson')
+  if ok and cjson and cjson.decode then
+    return cjson.decode
+  end
+  
+  -- Try dkjson next (most compatible)
+  local ok2, dkjson = pcall(require, 'dkjson')
+  if ok2 and dkjson and dkjson.decode then
+    return function(str) return dkjson.decode(str) end
+  end
+  
+  -- Try our bundled JSON module
+  local ok3, pj = pcall(require, 'codingbuddy.json')
+  if ok3 and pj and pj.decode then
+    return pj.decode
+  end
+  
+  error('No JSON decoder available. Please install dkjson: sudo luarocks install dkjson')
+end
 
 local function request(url, method, headers, body)
   method = method or 'POST'
@@ -65,34 +117,8 @@ function M.chat(opts)
   local model = opts.model or cfg.task_models.analysis or 'anthropic/claude-3.5-sonnet'
   local url = 'https://openrouter.ai/api/v1/chat/completions'
 
-  local payload = {
-    model = model,
-    messages = {
-      { role = 'system', content = 'You are a helpful coding assistant that produces concise, actionable analysis.' },
-      { role = 'user', content = opts.prompt or '' },
-    }
-  }
-
-  -- JSON encode with fallbacks (cjson, dkjson, pure lua module)
-  local json_encode
-  do
-    local ok, cjson = pcall(require, 'cjson')
-    if ok and cjson then
-      json_encode = cjson.encode
-    else
-      local ok2, dkjson = pcall(require, 'dkjson')
-      if ok2 and dkjson then
-        json_encode = function(x) return dkjson.encode(x) end
-      else
-        local ok3, pj = pcall(require, 'codingbuddy.json')
-        if ok3 and pj then
-          json_encode = pj.encode
-        else
-          error('No JSON encoder available')
-        end
-      end
-    end
-  end
+  -- Get JSON encoder once at the start
+  local json_encode = get_json_encoder()
 
 
   -- Support provider override and fallback chain (simple)
@@ -132,23 +158,103 @@ function M.chat(opts)
       local pl = {
         model = m,
         max_tokens = opts.max_tokens or 1024,
-        messages = {
+        messages = opts.messages or {
           { role = 'user', content = opts.prompt or '' }
         },
       }
-      -- Anthropic system prompt lives at top-level `system` (string or content array)
-      if type(sys) == 'string' or type(sys) == 'table' then pl.system = sys end
-      -- Scaffold for tool use (no runtime yet): pass tools/tool_choice if provided
-      if opts.tools and type(opts.tools) == 'table' then pl.tools = opts.tools end
-      if opts.tool_choice ~= nil then pl.tool_choice = opts.tool_choice end
+
+      -- Anthropic system prompt: string, content array, or content blocks
+      if type(sys) == 'string' then
+        pl.system = sys
+      elseif type(sys) == 'table' then
+        -- Check if it's an array of content blocks or a simple array
+        if sys[1] and type(sys[1]) == 'table' and sys[1].type then
+          -- Array of content blocks: [{ type = "text", text = "..." }, ...]
+          pl.system = sys
+        elseif sys[1] and type(sys[1]) == 'string' then
+          -- Simple string array, convert to content blocks
+          local content_blocks = {}
+          for i = 1, #sys do
+            if type(sys[i]) == 'string' then
+              table.insert(content_blocks, { type = 'text', text = sys[i] })
+            end
+          end
+          pl.system = content_blocks
+        else
+          -- Assume it's already properly formatted content blocks
+          pl.system = sys
+        end
+      end
+
+      -- Convert registry to Anthropic tool format
+      if opts.tools and type(opts.tools) == 'table' then
+        local tools = {}
+        for name, def in pairs(opts.tools) do
+          tools[#tools+1] = {
+            name = name,
+            description = def.description,
+            input_schema = def.input_schema
+          }
+        end
+        pl.tools = tools
+        if opts.tool_choice then pl.tool_choice = opts.tool_choice end
+      end
       return pl
     else
       local m = opts.model or cfg.provider_models[p] or cfg.task_models.analysis
       local sys = (opts.system ~= nil) and opts.system or default_system
-      return { model = m, messages = {
-        { role = 'system', content = sys },
-        { role = 'user', content = opts.prompt or '' },
-      }}
+      -- For non-Anthropic providers, convert arrays to concatenated string
+      if type(sys) == 'table' then
+        if sys[1] and type(sys[1]) == 'table' and sys[1].text then
+          -- Content blocks format, extract text
+          local parts = {}
+          for i = 1, #sys do
+            if sys[i].text then table.insert(parts, sys[i].text) end
+          end
+          sys = table.concat(parts, '\n\n')
+        elseif sys[1] and type(sys[1]) == 'string' then
+          -- Simple string array
+          sys = table.concat(sys, '\n\n')
+        end
+      end
+      local messages = opts.messages or {
+        { role = 'user', content = opts.prompt or '' }
+      }
+
+      -- Add system message if not already present and we have a system prompt
+      if sys and sys ~= '' then
+        local has_system = false
+        for _, msg in ipairs(messages) do
+          if msg.role == 'system' then
+            has_system = true
+            break
+          end
+        end
+        if not has_system then
+          table.insert(messages, 1, { role = 'system', content = sys })
+        end
+      end
+
+      local payload = { model = m, messages = messages }
+      
+      -- Convert registry to OpenAI tool format for non-Anthropic providers
+      if opts.tools and type(opts.tools) == 'table' then
+        local tools = {}
+        for name, def in pairs(opts.tools) do
+          tools[#tools+1] = {
+            type = 'function',
+            ['function'] = {
+              name = name,
+              description = def.description,
+              parameters = def.input_schema
+            }
+          }
+        end
+        payload.tools = tools
+        if opts.tool_choice then payload.tool_choice = opts.tool_choice end
+      end
+      
+      return payload
     end
   end -- build_payload
 
@@ -202,16 +308,84 @@ function M.chat(opts)
     if f then f:write(line..'\n'); f:close() end
   end
 
-  local function extract_text(p, obj)
+  -- Extract structured response with text and tool calls
+  local function extract_response(p, obj)
     if p == 'anthropic' then
-      local c = obj and obj.content and obj.content[1]
-      return c and (c.text or c.content or c.value)
+      local content = obj and obj.content
+      local result = { text = nil, tool_calls = {}, raw_content = content }
+
+      if type(content) == 'table' then
+        for i = 1, #content do
+          local block = content[i]
+          if type(block) == 'table' then
+            if block.type == 'text' and type(block.text) == 'string' then
+              if not result.text then result.text = block.text end
+            elseif block.type == 'tool_use' then
+              local tool_call = {
+                id = block.id,
+                name = block.name,
+                input = block.input
+              }
+              table.insert(result.tool_calls, tool_call)
+            end
+          end
+        end
+      end
+
+      return result
     else
-      return obj and obj.choices and obj.choices[1] and obj.choices[1].message and obj.choices[1].message.content
+      -- OpenAI/OpenRouter format
+      local message = obj and obj.choices and obj.choices[1] and obj.choices[1].message
+      local result = { text = nil, tool_calls = {}, raw_content = message }
+
+      if message then
+        result.text = message.content
+        if message.tool_calls and type(message.tool_calls) == 'table' then
+          for i = 1, #message.tool_calls do
+            local tc = message.tool_calls[i]
+            if tc['function'] then
+              local tool_call = {
+                id = tc.id,
+                name = tc['function'].name,
+                input = tc['function'].arguments -- Note: this might be a JSON string
+              }
+              table.insert(result.tool_calls, tool_call)
+            end
+          end
+        end
+      end
+
+      return result
     end
   end
 
-  local function try_provider(p)
+  -- Backward compatible text extraction (for existing call sites)
+  local function extract_text(p, obj)
+    local response = extract_response(p, obj)
+    return response and response.text
+  end
+
+  -- Execute tool calls using the registry handlers
+  local function execute_tools(tool_calls, registry)
+    local results = {}
+    for i = 1, #tool_calls do
+      local call = tool_calls[i]
+      local handler = registry[call.name] and registry[call.name].handler
+      if handler then
+        local ok, res = pcall(handler, call.input or {})
+        if ok then
+          results[#results+1] = { tool_use_id = call.id, type = 'tool_result', content = res }
+        else
+          results[#results+1] = { tool_use_id = call.id, type = 'tool_result', content = { error = tostring(res) }, is_error = true }
+        end
+      else
+        results[#results+1] = { tool_use_id = call.id, type = 'tool_result', content = { error = 'tool not found: ' .. tostring(call.name) }, is_error = true }
+      end
+    end
+    return results
+  end
+
+  local function try_provider(p, conversation_messages)
     local url, headers = build_url_and_headers(p)
     if (p == 'openrouter' and not cfg.openrouter_api_key) or (p == 'openai' and not cfg.openai_api_key) or (p == 'anthropic' and not cfg.anthropic_api_key) then
       return nil, 'Missing API key for '..p
@@ -219,56 +393,154 @@ function M.chat(opts)
 
     local payload = build_payload(p)
 
-    -- JSON encode
-    local encoder
-    do
-      local ok, cjson = pcall(require, 'cjson'); if ok and cjson then encoder = cjson.encode end
-      if not encoder then local ok2, dkjson = pcall(require, 'dkjson'); if ok2 and dkjson then encoder = function(x) return dkjson.encode(x) end end end
-      if not encoder then encoder = function(x)
-        -- fallback: reuse minimal encoder from above block (implement minimal here)
-        local function esc(s) s=s:gsub('\\','\\\\'):gsub('"','\\"'):gsub('\n','\\n'):gsub('\r','\\r'):gsub('\t','\\t'); return '"'..s..'"' end
-        local function is_array(t) local n=0 for k,_ in pairs(t) do if type(k)~='number' then return false end n=n+1 end for i=1,n do if t[i]==nil then return false end end return true end
-        local function enc(v) local t=type(v); if t=='nil' then return 'null' elseif t=='boolean' then return v and 'true' or 'false' elseif t=='number' then return tostring(v) elseif t=='string' then return esc(v) elseif t=='table' then if is_array(v) then local parts={} for i=1,#v do parts[#parts+1]=enc(v[i]) end return '['..table.concat(parts,',')..']' else local parts={} for k,val in pairs(v) do parts[#parts+1]=esc(tostring(k))..':'..enc(val) end return '{'..table.concat(parts,',')..'}' end else return esc(tostring(v)) end end
-        return enc(x)
-      end end
+    -- If we have conversation messages (for tool execution), replace the messages
+    if conversation_messages and type(conversation_messages) == 'table' then
+      payload.messages = conversation_messages
     end
+
+    -- Get JSON encoder and decoder
+    local encoder = get_json_encoder()
+    local decoder = get_json_decoder()
 
     local body = encoder(payload)
     local data, code, status = request(url, 'POST', headers, body)
     if tonumber(code) ~= 200 then return nil, 'HTTP '..tostring(code)..' '..tostring(status) end
 
-    -- decode
-    local decoder
-    do
-      local ok, cjson = pcall(require, 'cjson'); if ok and cjson then decoder = cjson.decode end
-      if not decoder then local ok2, dkjson = pcall(require, 'dkjson'); if ok2 and dkjson then decoder = function(str) return dkjson.decode(str) end end end
-      if not decoder then local ok3, pj = pcall(require, 'codingbuddy.json'); if ok3 and pj then decoder = pj.decode else decoder = function(_) return {} end end end
-    end
+    -- decode response
     local obj = decoder(data)
-    local text = extract_text(p, obj)
+
+    -- Return structured response for tool handling
+    local response = extract_response(p, obj)
     local usage = extract_usage(p, obj)
     local cost = estimate_cost(p, usage)
     log_usage(p, (payload and payload.model) or opts.model, usage, cost)
-    if not text then return nil, 'Empty response' end
-    return text
+
+    if not response.text and #response.tool_calls == 0 then
+      return nil, 'Empty response'
+    end
+
+    return response, usage, cost
   end
 
-  -- Try requested provider then fallbacks
+  -- Build deterministic provider chain respecting config fallback_chain
   local chain = {}
-  if cfg.fallback_chain and #cfg.fallback_chain > 0 then
-    for i=1,#cfg.fallback_chain do chain[#chain+1] = cfg.fallback_chain[i] end
-  else
-    chain = { 'openrouter', 'openai', 'anthropic' }
+  
+  -- Start with explicitly requested provider if not already in config chain
+  local config_chain = cfg.fallback_chain or { 'openrouter', 'openai', 'anthropic', 'deepseek' }
+  local provider_in_config = false
+  for _, p in ipairs(config_chain) do
+    if p == provider then
+      provider_in_config = true
+      break
+    end
   end
-  table.insert(chain, 1, provider)
-  -- de-dup
-  local seen, ordered = {}, {}
-  for _,p in ipairs(chain) do if not seen[p] then seen[p]=true; ordered[#ordered+1]=p end end
+  
+  -- If provider not in config chain, try it first
+  if not provider_in_config then
+    chain[1] = provider
+  end
+  
+  -- Add config fallback chain, maintaining order and uniqueness
+  local seen = {}
+  if not provider_in_config then
+    seen[provider] = true
+  end
+  
+  for _, p in ipairs(config_chain) do
+    if not seen[p] then
+      seen[p] = true
+      chain[#chain + 1] = p
+    end
+  end
+  
+  local ordered = chain
 
   local last_err
   for _,p in ipairs(ordered) do
-    local text, err = try_provider(p)
-    if text then return text end
+    local response, usage, cost, err = try_provider(p)
+    if response then
+      -- Check if we should execute tools automatically
+      if opts.auto_execute_tools and opts.tool_registry and #response.tool_calls > 0 then
+        -- Execute tools and continue conversation
+        local tool_results = execute_tools(response.tool_calls, opts.tool_registry)
+
+        if #tool_results > 0 then
+          -- Build conversation messages for follow-up
+          local conversation = {}
+
+          -- Add original user message
+          table.insert(conversation, { role = 'user', content = opts.prompt or '' })
+
+          -- Add assistant response with tool calls
+          if p == 'anthropic' then
+            table.insert(conversation, { role = 'assistant', content = response.raw_content })
+            -- Add tool results
+            for i = 1, #tool_results do
+              table.insert(conversation, { role = 'user', content = { tool_results[i] } })
+            end
+          else
+            -- OpenAI format - add assistant message with tool calls, then tool results
+            local assistant_msg = { role = 'assistant', content = response.text }
+            if #response.tool_calls > 0 then
+              assistant_msg.tool_calls = {}
+              for i = 1, #response.tool_calls do
+                local tc = response.tool_calls[i]
+                table.insert(assistant_msg.tool_calls, {
+                  id = tc.id,
+                  type = 'function',
+                  ['function'] = { name = tc.name, arguments = tc.input }
+                })
+              end
+            end
+            table.insert(conversation, assistant_msg)
+
+            -- Add tool results as tool messages
+            for i = 1, #tool_results do
+              table.insert(conversation, {
+                role = 'tool',
+                tool_call_id = tool_results[i].tool_use_id,
+                content = type(tool_results[i].content) == 'table' and
+                         (tool_results[i].content.error or 'Tool executed') or
+                         tostring(tool_results[i].content)
+              })
+            end
+          end
+
+          -- Make follow-up request
+          local final_response, final_usage, final_cost, final_err = try_provider(p, conversation)
+          if final_response then
+            -- Return final response, but preserve tool execution info
+            if opts.return_structured then
+              return {
+                text = final_response.text,
+                tool_calls = response.tool_calls,
+                tool_results = tool_results,
+                raw_content = final_response.raw_content,
+                usage = final_usage,
+                cost = final_cost
+              }
+            else
+              return final_response.text -- Backward compatible
+            end
+          else
+            last_err = final_err
+          end
+        end
+      end
+
+      -- No tool execution or tools disabled, return response
+      if opts.return_structured then
+        return {
+          text = response.text,
+          tool_calls = response.tool_calls,
+          raw_content = response.raw_content,
+          usage = usage,
+          cost = cost
+        }
+      else
+        return response.text -- Backward compatible
+      end
+    end
     last_err = err
   end
   return nil, last_err or 'All providers failed'

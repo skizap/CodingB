@@ -1,8 +1,8 @@
 -- analyzer.lua - basic code analysis using OpenRouter (Phase 1)
 
-local ai = require('codingbuddy.ai_connector')
-local config = require('codingbuddy.config')
-local utils = require('codingbuddy.utils')
+local ai = require('ai_connector')
+local config = require('config')
+local utils = require('utils')
 
 local M = {}
 

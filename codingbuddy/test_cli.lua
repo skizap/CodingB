@@ -3,7 +3,7 @@
 --   OPENROUTER_API_KEY=... lua codingbuddy/test_cli.lua path/to/file.lua
 --   OPENAI_API_KEY=... ANTHROPIC_API_KEY=... lua codingbuddy/test_cli.lua path/to/file.py provider=openai model=gpt-4o-mini
 
-package.path = 'codingbuddy/?.lua;codingbuddy/?/init.lua;'..package.path
+package.path = './?.lua;./?/init.lua;'..package.path
 
 local analyzer = require('codingbuddy.analyzer')
 local cfg = require('codingbuddy.config').get()

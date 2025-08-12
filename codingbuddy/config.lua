@@ -13,9 +13,14 @@ local defaults = {
     anthropic = 'claude-3-5-sonnet-latest',
     deepseek = 'deepseek-chat',
   },
+  workspace_root = nil, -- defaults to PWD or current working directory
   cache_enabled = false,
   log_enabled = true,
   timeout = 30,
+  conversation_encryption = false, -- Encrypt conversation files at rest (requires CODINGBUDDY_PASSPHRASE env var)
+  -- Terminal policy configuration with safe defaults
+  terminal_allow = { 'ls', 'rg', 'grep', 'sed', 'awk', 'python', 'lua', 'bash', 'sh', 'node', 'npm', 'cat', 'head', 'tail', 'wc', 'sort', 'uniq', 'find', 'which', 'echo', 'pwd', 'date', 'git' },
+  terminal_deny = { 'rm -rf', 'shutdown', 'reboot', 'mkfs', 'dd if=', 'cryptsetup', 'sudo ', 'su ', 'chmod 777', 'chown', 'mount', 'umount', 'fdisk', 'parted', 'format' },
   cost = {
     enabled = true,
     prices_per_1k = {

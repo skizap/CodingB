@@ -10,6 +10,7 @@
     "anthropic": "claude-3-5-sonnet-latest",
     "deepseek": "deepseek-chat"
   },
+  "workspace_root": null,
   "openrouter_api_key": "YOUR_OPENROUTER_API_KEY",
   "openai_api_key": "YOUR_OPENAI_API_KEY",
   "anthropic_api_key": "YOUR_ANTHROPIC_API_KEY",
@@ -17,6 +18,8 @@
   "cache_enabled": true,
   "log_enabled": true,
   "timeout": 30,
+  "terminal_allow": ["ls", "rg", "grep", "sed", "awk", "python", "lua", "bash", "sh", "node", "npm", "cat", "head", "tail", "wc", "sort", "uniq", "find", "which", "echo", "pwd", "date", "git"],
+  "terminal_deny": ["rm -rf", "shutdown", "reboot", "mkfs", "dd if=", "cryptsetup", "sudo ", "su ", "chmod 777", "chown", "mount", "umount", "fdisk", "parted", "format"],
   "cost": {
     "enabled": true,
     "currency": "USD",
@@ -32,10 +35,13 @@
     "fallback_chain": "Order of providers to try when requests fail.",
     "task_models": "Preferred model per task type (analysis/generation/docs/refactor).",
     "provider_models": "Default model to use for each provider if task model is ambiguous.",
+    "workspace_root": "Root directory for file operations. Defaults to PWD or current working directory. Used for sandboxing.",
     "*_api_key": "You can set via environment variables instead of here.",
     "cache_enabled": "Caches analysis results by code hash in cache/.",
     "log_enabled": "Writes logs to logs/codingbuddy.log.",
     "timeout": "HTTP timeout in seconds.",
+    "terminal_allow": "List of command prefixes allowed for terminal execution. Commands must start with one of these strings to be permitted.",
+    "terminal_deny": "List of command patterns that are explicitly denied, regardless of allowlist. Deny list takes precedence over allow list.",
     "cost": "If enabled, estimates cost by provider and logs it."
   }
 }
