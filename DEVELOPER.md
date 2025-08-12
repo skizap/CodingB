@@ -23,26 +23,26 @@ Complete reference for developers working with or contributing to CodingBuddy.
 ├─────────────────────────────────────────────────────────────┤
 │  CodingBuddy Plugin Architecture                            │
 │                                                             │
-│  ┌─────────────────┐    ┌─────────────────┐                │
-│  │   main.lua      │    │ chat_interface  │                │
-│  │   - Plugin init │◄──►│ - UI logic      │                │
-│  │   - Menu items  │    │ - Chat loop     │                │
-│  └─────────────────┘    │ - Commands      │                │
-│                         └─────────────────┘                │
+│  ┌─────────────────┐    ┌─────────────────┐                 │ 
+│  │   main.lua      │    │ chat_interface  │                 │
+│  │   - Plugin init │◄──►│ - UI logic      │                 │
+│  │   - Menu items  │    │ - Chat loop     │                 │
+│  └─────────────────┘    │ - Commands      │                 │
+│                         └─────────────────┘                 │
 │                                 │                           │
-│  ┌─────────────────┐    ┌─────────────────┐                │
-│  │conversation_mgr │◄──►│  ai_connector   │                │
-│  │- State mgmt     │    │ - Multi-provider│                │
-│  │- Persistence    │    │ - Context aware │                │
-│  │- History        │    │ - Tool support  │                │
-│  └─────────────────┘    └─────────────────┘                │
-│           │                       │                        │
-│  ┌─────────────────┐    ┌─────────────────┐                │
-│  │   File System        │   AI Providers  │                │
-│  │ - JSON storage  │    │ - Anthropic     │                │
-│  │ - Conversations │    │ - OpenAI        │                │
-│  │ - Logs/Cache    │    │ - OpenRouter    │                │
-│  └─────────────────┘    └─────────────────┘                │
+│  ┌─────────────────┐    ┌─────────────────┐                 │
+│  │conversation_mgr │◄──►│  ai_connector   │                 │
+│  │- State mgmt     │    │ - Multi-provider│                 │
+│  │- Persistence    │    │ - Context aware │                 │
+│  │- History        │    │ - Tool support  │                 │
+│  └─────────────────┘    └─────────────────┘                 │
+│           │                       │                         │
+│  ┌─────────────────┐    ┌─────────────────┐                 │
+│  │   File System        │   AI Providers  │                 │
+│  │ - JSON storage  │    │ - Anthropic     │                 │
+│  │ - Conversations │    │ - OpenAI        │                 │
+│  │ - Logs/Cache    │    │ - OpenRouter    │                 │
+│  └─────────────────┘    └─────────────────┘                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 

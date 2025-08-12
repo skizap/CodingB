@@ -152,8 +152,27 @@ function M.chat(opts)
 
   local function build_payload(p)
     local default_system = 'You are a helpful coding assistant that produces concise, actionable analysis.'
-    if p == 'anthropic' then
-      local m = opts.model or cfg.provider_models.anthropic
+    
+    -- OpenRouter provider handling - pass through to underlying model
+    local actual_provider = p
+    local model_override = nil
+    
+    if p == 'openrouter' and opts.model then
+      -- OpenRouter uses model names like "anthropic/claude-3.5-sonnet" or "openai/gpt-4o"
+      if opts.model:match('^anthropic/') then
+        actual_provider = 'anthropic'
+        model_override = opts.model:gsub('^anthropic/', '')
+      elseif opts.model:match('^openai/') then
+        actual_provider = 'openai' 
+        model_override = opts.model:gsub('^openai/', '')
+      else
+        -- Generic OpenRouter model, use OpenAI-compatible format
+        actual_provider = 'openai'
+      end
+    end
+    
+    if actual_provider == 'anthropic' then
+      local m = model_override or opts.model or cfg.provider_models.anthropic
       local sys = (opts.system ~= nil) and opts.system or default_system
       local pl = {
         model = m,
@@ -201,7 +220,8 @@ function M.chat(opts)
       end
       return pl
     else
-      local m = opts.model or cfg.provider_models[p] or cfg.task_models.analysis
+      -- OpenAI-compatible format (includes OpenRouter and direct OpenAI)
+      local m = model_override or opts.model or cfg.provider_models[p] or cfg.task_models.analysis
       local sys = (opts.system ~= nil) and opts.system or default_system
       -- For non-Anthropic providers, convert arrays to concatenated string
       if type(sys) == 'table' then
@@ -258,20 +278,41 @@ function M.chat(opts)
     end
   end -- build_payload
 
-  local function extract_usage(p, obj)
+  local function extract_usage(p, obj, actual_provider)
     -- Normalize usage to {prompt_tokens=?, completion_tokens=?, total_tokens=?}
     if not obj then return nil end
+    
     local u = obj.usage or obj.usage_info
-    if p == 'anthropic' then
-      local inp = (u and (u.input_tokens or u.prompt_tokens)) or obj.input_tokens
-      local outp = (u and (u.output_tokens or u.completion_tokens)) or obj.output_tokens
-      local tot = (u and u.total_tokens) or ((inp or 0) + (outp or 0))
+    local usage_provider = actual_provider or p
+    
+    -- Handle OpenRouter's passthrough usage format
+    if p == 'openrouter' then
+      if u then
+        -- Standard OpenAI-compatible format from OpenRouter
+        local inp = u.prompt_tokens or u.input_tokens or 0
+        local outp = u.completion_tokens or u.output_tokens or 0
+        local tot = u.total_tokens or (inp + outp)
+        return { prompt_tokens = inp, completion_tokens = outp, total_tokens = tot }
+      else
+        -- No usage data available
+        return nil
+      end
+    elseif usage_provider == 'anthropic' or p == 'anthropic' then
+      -- Anthropic format: input_tokens and output_tokens
+      local inp = (u and (u.input_tokens or u.prompt_tokens)) or obj.input_tokens or 0
+      local outp = (u and (u.output_tokens or u.completion_tokens)) or obj.output_tokens or 0
+      local tot = (u and u.total_tokens) or (inp + outp)
       return { prompt_tokens = inp, completion_tokens = outp, total_tokens = tot }
     else
-      local inp = u and (u.prompt_tokens or u.input_tokens)
-      local outp = u and (u.completion_tokens or u.output_tokens)
-      local tot = u and (u.total_tokens or ((inp or 0) + (outp or 0)))
-      return u and { prompt_tokens = inp, completion_tokens = outp, total_tokens = tot } or nil
+      -- OpenAI format: prompt_tokens and completion_tokens
+      if u then
+        local inp = u.prompt_tokens or u.input_tokens or 0
+        local outp = u.completion_tokens or u.output_tokens or 0
+        local tot = u.total_tokens or (inp + outp)
+        return { prompt_tokens = inp, completion_tokens = outp, total_tokens = tot }
+      else
+        return nil
+      end
     end
   end
 
@@ -392,6 +433,16 @@ function M.chat(opts)
     end
 
     local payload = build_payload(p)
+    
+    -- Track actual provider for OpenRouter models
+    local actual_provider = p
+    if p == 'openrouter' and opts.model then
+      if opts.model:match('^anthropic/') then
+        actual_provider = 'anthropic'
+      elseif opts.model:match('^openai/') then
+        actual_provider = 'openai'
+      end
+    end
 
     -- If we have conversation messages (for tool execution), replace the messages
     if conversation_messages and type(conversation_messages) == 'table' then
@@ -410,16 +461,18 @@ function M.chat(opts)
     local obj = decoder(data)
 
     -- Return structured response for tool handling
-    local response = extract_response(p, obj)
-    local usage = extract_usage(p, obj)
+    local response = extract_response(actual_provider, obj)
+    local usage = extract_usage(p, obj, actual_provider)
     local cost = estimate_cost(p, usage)
-    log_usage(p, (payload and payload.model) or opts.model, usage, cost)
+    local model_used = (payload and payload.model) or opts.model
+    
+    log_usage(p, model_used, usage, cost)
 
     if not response.text and #response.tool_calls == 0 then
       return nil, 'Empty response'
     end
 
-    return response, usage, cost
+    return response, usage, cost, model_used, p
   end
 
   -- Build deterministic provider chain respecting config fallback_chain
@@ -457,7 +510,7 @@ function M.chat(opts)
 
   local last_err
   for _,p in ipairs(ordered) do
-    local response, usage, cost, err = try_provider(p)
+    local response, usage, cost, model_used, provider_used = try_provider(p)
     if response then
       -- Check if we should execute tools automatically
       if opts.auto_execute_tools and opts.tool_registry and #response.tool_calls > 0 then
@@ -507,7 +560,7 @@ function M.chat(opts)
           end
 
           -- Make follow-up request
-          local final_response, final_usage, final_cost, final_err = try_provider(p, conversation)
+          local final_response, final_usage, final_cost, final_model, final_provider = try_provider(p, conversation)
           if final_response then
             -- Return final response, but preserve tool execution info
             if opts.return_structured then
@@ -517,13 +570,15 @@ function M.chat(opts)
                 tool_results = tool_results,
                 raw_content = final_response.raw_content,
                 usage = final_usage,
-                cost = final_cost
+                cost = final_cost,
+                model = final_model or model_used,
+                provider = final_provider or provider_used
               }
             else
               return final_response.text -- Backward compatible
             end
           else
-            last_err = final_err
+            last_err = 'Tool execution follow-up failed'
           end
         end
       end
@@ -535,13 +590,16 @@ function M.chat(opts)
           tool_calls = response.tool_calls,
           raw_content = response.raw_content,
           usage = usage,
-          cost = cost
+          cost = cost,
+          model = model_used,
+          provider = provider_used
         }
       else
         return response.text -- Backward compatible
       end
+    else
+      last_err = usage or 'Provider failed'
     end
-    last_err = err
   end
   return nil, last_err or 'All providers failed'
 
