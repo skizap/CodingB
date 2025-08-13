@@ -55,6 +55,7 @@ local analyzer = safe_require('analyzer')
 local dialogs = safe_require('dialogs')
 local config = safe_require('config')
 local chat_interface = safe_require('chat_interface')
+local sidecar_connector = safe_require('sidecar_connector')  -- Optional sidecar integration
 
 local M = {}
 

@@ -58,7 +58,7 @@ The easiest way to install CodingBuddy is using the automated installation scrip
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/CodingBuddy.git
+   git clone https://github.com/skizap/CodingBuddy.git
    cd CodingBuddy
    ```
 
@@ -85,7 +85,7 @@ If you prefer manual installation or the automated script doesn't work for your 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/CodingBuddy.git
+   git clone https://github.com/skizap/CodingBuddy.git
    cd CodingBuddy
    ```
 
@@ -120,7 +120,7 @@ For developers who want to contribute:
 1. **Fork the repository** on GitHub
 2. **Clone your fork:**
    ```bash
-   git clone https://github.com/yourusername/CodingBuddy.git
+   git clone https://github.com/skizap/CodingBuddy.git
    cd CodingBuddy
    ```
 3. **Create a symlink** for easier development:
@@ -341,7 +341,7 @@ Then check logs in:
 ### Getting Help
 
 1. **Check documentation:** [docs/](docs/)
-2. **Search issues:** [GitHub Issues](https://github.com/yourusername/CodingBuddy/issues)
+2. **Search issues:** [GitHub Issues](https://github.com/skizap/CodingBuddy/issues)
 3. **Create new issue** with:
    - Operating system and version
    - Geany version

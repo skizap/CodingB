@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# CodingBuddy Automated Installation Script
+# CodingBuddy Automated Installation Script - Phase 15 Enhanced
 # Intelligently detects Linux distribution and installs dependencies
+# Now includes enhanced package verification and system tool checking
 
 set -e  # Exit on any error
 
@@ -84,10 +85,23 @@ install_dependencies() {
         fedora|centos|rhel|rocky|almalinux)
             if command -v dnf >/dev/null 2>&1; then
                 log_info "Using dnf package manager..."
-                sudo dnf install -y geany geany-plugins lua lua-socket
+                sudo dnf install -y geany geany-plugins lua lua-socket \
+                    ripgrep patch coreutils openssl
+                # Try to install luaossl via luarocks if available
+                if command -v luarocks >/dev/null 2>&1; then
+                    log_info "Installing recommended Lua packages..."
+                    sudo luarocks install luaossl || log_warning "Failed to install luaossl (optional but recommended)"
+                fi
             elif command -v yum >/dev/null 2>&1; then
                 log_info "Using yum package manager..."
-                sudo yum install -y geany geany-plugins lua lua-socket
+                sudo yum install -y geany geany-plugins lua lua-socket \
+                    patch coreutils openssl
+                # ripgrep may not be available on older RHEL/CentOS, try EPEL
+                sudo yum install -y ripgrep || log_warning "ripgrep not available - install from EPEL if needed"
+                if command -v luarocks >/dev/null 2>&1; then
+                    log_info "Installing recommended Lua packages..."
+                    sudo luarocks install luaossl || log_warning "Failed to install luaossl (optional but recommended)"
+                fi
             else
                 log_error "No suitable package manager found (dnf/yum)"
                 exit 1
@@ -95,18 +109,29 @@ install_dependencies() {
             ;;
         opensuse*|sles)
             log_info "Using zypper package manager..."
-            sudo zypper install -y geany geany-plugins lua51 lua51-luasocket
+            sudo zypper install -y geany geany-plugins lua51 lua51-luasocket \
+                ripgrep patch coreutils openssl
+            # Try to install luaossl via luarocks if available
+            if command -v luarocks >/dev/null 2>&1; then
+                log_info "Installing recommended Lua packages..."
+                sudo luarocks install luaossl || log_warning "Failed to install luaossl (optional but recommended)"
+            fi
             ;;
         arch|manjaro)
             log_info "Using pacman package manager..."
-            sudo pacman -S --noconfirm geany geany-plugins lua lua-socket
+            sudo pacman -S --noconfirm geany geany-plugins lua lua-socket \
+                ripgrep patch coreutils openssl
             if command -v luarocks >/dev/null 2>&1; then
+                log_info "Installing recommended Lua packages..."
                 sudo luarocks install dkjson || log_warning "Failed to install dkjson (optional)"
+                sudo luarocks install luaossl || log_warning "Failed to install luaossl (optional but recommended)"
             fi
             ;;
         *)
             log_warning "Unsupported distribution: $DISTRO"
-            log_info "Please install manually: geany, geany-plugins, lua, lua-socket"
+            log_info "Please install manually:"
+            log_info "  Required: geany, geany-plugins, lua, lua-socket, ripgrep, patch, coreutils, openssl"
+            log_info "  Optional: luarocks (for luaossl package)"
             read -p "Continue with plugin installation? (y/N): " -n 1 -r
             echo
             if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -192,6 +217,55 @@ setup_config() {
     fi
 }
 
+# Verify presence of required system tools
+verify_system_tools() {
+    log_info "Verifying presence of required system tools..."
+    
+    local missing_tools=()
+    local required_tools=("realpath" "diff" "patch" "openssl")
+    
+    for tool in "${required_tools[@]}"; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            missing_tools+=("$tool")
+            log_warning "Missing required tool: $tool"
+        else
+            log_success "Found required tool: $tool"
+        fi
+    done
+    
+    # Check for optional but recommended tools
+    local optional_tools=("rg" "ripgrep")
+    for tool in "${optional_tools[@]}"; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            log_success "Found optional tool: $tool"
+            break
+        fi
+    done
+    
+    if [ ${#missing_tools[@]} -gt 0 ]; then
+        log_error "The following required tools are missing: ${missing_tools[*]}"
+        log_info "Please install them using your package manager before continuing."
+        case $DISTRO in
+            ubuntu|debian|linuxmint|pop)
+                log_info "Try: sudo apt-get install ${missing_tools[*]}"
+                ;;
+            fedora|centos|rhel|rocky|almalinux)
+                log_info "Try: sudo dnf install ${missing_tools[*]} (or yum on older systems)"
+                ;;
+            opensuse*|sles)
+                log_info "Try: sudo zypper install ${missing_tools[*]}"
+                ;;
+            arch|manjaro)
+                log_info "Try: sudo pacman -S ${missing_tools[*]}"
+                ;;
+        esac
+        return 1
+    fi
+    
+    log_success "All required system tools are available"
+    return 0
+}
+
 # Run tests
 run_tests() {
     log_info "Running basic tests..."
@@ -217,6 +291,9 @@ run_tests() {
     else
         log_warning "lua-socket not found - HTTP requests may not work"
     fi
+    
+    # Verify system tools
+    verify_system_tools
 }
 
 # Main installation function

@@ -44,6 +44,15 @@ function M.list_dir(abs)
   return entries
 end
 
+function M.exists(abs)
+  local f = io.open(abs, 'r')
+  if f then
+    f:close()
+    return true
+  end
+  return false
+end
+
 function M.search(root_abs, query)
   local cmd = 'rg --no-heading --line-number --color never "' .. query:gsub('"', '\\"') .. '" "' .. root_abs .. '"'
   local h = io.popen(cmd)

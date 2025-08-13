@@ -23,9 +23,10 @@ CodingBuddy transforms Geany into an intelligent development environment with AI
 ### 🌐 Multi-Provider AI Support
 - **Primary**: OpenRouter.ai (400+ models, single API key)
 - **Secondary**: Anthropic Claude, OpenAI GPT, DeepSeek
+- **Local**: Ollama integration for offline AI models
 - **Automatic fallback** when providers are unavailable
 - **Cost optimization** through intelligent model selection
-- **Local model support** via Ollama integration
+- **Privacy-first** with local model options
 
 ### 💾 Smart Persistence
 - **Conversation history** automatically saved and restored
@@ -44,7 +45,7 @@ CodingBuddy transforms Geany into an intelligent development environment with AI
 
 #### Automated Installation (Recommended)
 ```bash
-git clone https://github.com/yourusername/CodingBuddy.git
+git clone https://github.com/skizap/CodingBuddy.git
 cd CodingBuddy
 ./install.sh
 ```
@@ -58,7 +59,7 @@ The automated installer will:
 #### Manual Installation
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/CodingBuddy.git
+   git clone https://github.com/skizap/CodingBuddy.git
    cd CodingBuddy
    ```
 
@@ -84,7 +85,38 @@ The automated installer will:
 3. **Analyze code:** Tools → CodingBuddy: Analyze with Chat
 4. **Explore commands:** Type `/help` in the chat interface
 
-## 💬 Usage Examples
+### 🔒 Security Features
+
+- **Task Mode with Approvals** - Review AI file operations before execution
+- **Conversation Encryption** - Optional AES-256 encryption for chat history
+- **Sandbox Environment** - All AI file operations restricted to working directory
+
+### ⚡ Task Mode and Approvals
+
+Enable task mode for enhanced safety when AI performs file operations:
+
+```
+User: /task start
+System: Task mode enabled. AI requests for file operations will require approval.
+
+User: Create a hello world script in Python
+AI: I'll create a Python hello world script for you.
+
+Operation 1 (write_file) has been queued for approval. Use /approve 1 to execute or /reject 1 to cancel.
+
+User: /ops
+Operations Queue:
+[10:30] ID:1 write_file - Write to: hello.py (PENDING)
+
+User: /approve 1
+System: Approved operation 1
+
+User: Thanks!
+System: Executed approved operations:
+- Operation 1 (write_file): Success
+```
+
+### 💬 Usage Examples
 
 ### Interactive Chat Session
 ```
@@ -179,10 +211,41 @@ CodingBuddy supports multiple AI providers with automatic fallback:
 }
 ```
 
+### 🔒 Encryption Setup (Optional)
+
+Protect your conversation history with AES-256 encryption:
+
+1. **Install OpenSSL** (required for encryption):
+   ```bash
+   sudo apt install openssl  # Ubuntu/Debian
+   brew install openssl      # macOS
+   ```
+
+2. **Set encryption passphrase**:
+   ```bash
+   export CODINGBUDDY_PASSPHRASE="your-very-secure-passphrase-here"
+   # Add to ~/.bashrc or ~/.zshrc to persist across sessions
+   ```
+
+3. **Enable encryption in config**:
+   ```json
+   {
+     "conversation_encryption": true,
+     // ... other settings
+   }
+   ```
+
+**Security Notes:**
+- Use a strong 20+ character passphrase with mixed case, numbers, and symbols
+- Never store the passphrase in config files or version control
+- If you lose your passphrase, encrypted conversations cannot be recovered
+- See [ENCRYPTION.md](ENCRYPTION.md) for detailed security information
+
 ## 📚 Documentation
 
 - **[Installation Guide](INSTALL.md)** - Detailed setup instructions
 - **[User Guide](USER_GUIDE.md)** - Complete usage manual with examples
+- **[Ollama Setup Guide](OLLAMA_SETUP.md)** - Local AI models setup and configuration
 - **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Fix common issues
 - **[Developer Guide](DEVELOPER.md)** - API reference and development info
 - **[Chat Interface](docs/chat_interface.md)** - Interactive chat system details
@@ -222,7 +285,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Geany IDE](https://www.geany.org/)
 - [GeanyLua Plugin](https://plugins.geany.org/geanylua.html)
 - [OpenRouter.ai](https://openrouter.ai/)
-- [Project Issues](https://github.com/yourusername/CodingBuddy/issues)
+- [Project Issues](https://github.com/skizap/CodingBuddy/issues)
 
 ---
 

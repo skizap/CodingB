@@ -1,0 +1,70 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "MultiappV1 Sidecar",
+  "version": "1.0.0",
+  "identifier": "com.multiappv1.sidecar",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "MultiappV1 Sidecar",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "theme": "dark",
+        "titleBarStyle": "Transparent",
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://localhost:* ws://localhost:*; connect-src 'self' http://localhost:* ws://localhost:* unix:",
+      "devCsp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: http://localhost:* ws://localhost:* unix:",
+      "freezePrototype": false,
+      "dangerousDisableAssetCspModification": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-create-dir",
+    "http:default"
+  ],
+  "plugins": {
+    "shell": {
+      "open": true,
+      "scope": [
+        {
+          "name": "terminal",
+          "cmd": "terminal",
+          "args": true,
+          "sidecar": false
+        }
+      ]
+    },
+    "http": {
+      "scope": ["http://localhost:*", "https://localhost:*"]
+    }
+  }
+}

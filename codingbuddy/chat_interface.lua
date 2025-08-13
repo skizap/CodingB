@@ -142,6 +142,7 @@ local function show_chat_window()
                 "- Type '/approve <id>' to approve an operation\n" ..
                 "- Type '/reject <id>' to reject an operation\n" ..
                 "- Type '/clear' to clear completed operations\n" ..
+                "- Type '/usage [hours]' to show usage statistics\n" ..
                 "- Type '/quit' to close chat\n\n" ..
                 "Your message:"
   
@@ -225,6 +226,21 @@ local function process_chat_command(input)
   elseif input:match('^/task%s+stop') then
     task_mode = false
     dialogs.alert('CodingBuddy', 'Task mode disabled. AI requests will execute normally.')
+    return false
+  elseif input:match('^/usage') then
+    -- Handle /usage command with optional time period
+    local usage_analyzer = require('usage_analyzer')
+    local hours_match = input:match('^/usage%s+(%d+)')
+    local hours = hours_match and tonumber(hours_match) or nil
+    
+    local usage_summary
+    if hours then
+      usage_summary = usage_analyzer.get_session_summary(hours)
+    else
+      usage_summary = usage_analyzer.get_total_summary()
+    end
+    
+    dialogs.show_text('CodingBuddy Usage Statistics', usage_summary)
     return false
   else
     -- Regular chat message

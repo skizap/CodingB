@@ -3,7 +3,7 @@ local M = {}
 
 local defaults = {
   provider = 'openrouter',
-  fallback_chain = { 'openrouter', 'openai', 'anthropic', 'deepseek' },
+  fallback_chain = { 'openrouter', 'openai', 'anthropic', 'deepseek', 'ollama' },
   task_models = {
     analysis = 'anthropic/claude-3.5-sonnet',
   },
@@ -12,6 +12,7 @@ local defaults = {
     openai = 'gpt-4o-mini',
     anthropic = 'claude-3-5-sonnet-latest',
     deepseek = 'deepseek-chat',
+    ollama = 'llama3.1',
   },
   workspace_root = nil, -- defaults to PWD or current working directory
   cache_enabled = false,
@@ -27,10 +28,15 @@ local defaults = {
       openai = { default_input = 0.003, default_output = 0.006 },
       anthropic = { default_input = 0.003, default_output = 0.015 },
       openrouter = { default_input = 0.0, default_output = 0.0 },
-      deepseek = { default_input = 0.002, default_output = 0.002 }
+      deepseek = { default_input = 0.002, default_output = 0.002 },
+      ollama = { default_input = 0.0, default_output = 0.0 }
     },
     currency = 'USD'
-  }
+  },
+  -- Optional MultiappV1 Tauri Sidecar integration
+  sidecar_enabled = false,
+  sidecar_url = 'http://localhost:8765',
+  sidecar_auto_approve_read_ops = true
 }
 
 local function expanduser(path)

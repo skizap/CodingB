@@ -265,7 +265,7 @@ Gets configuration setting with fallback.
 
 ```bash
 # Fork the repository on GitHub first
-git clone https://github.com/yourusername/CodingBuddy.git
+git clone https://github.com/skizap/CodingBuddy.git
 cd CodingBuddy
 
 # Create development symlink
@@ -592,4 +592,4 @@ end
 
 ---
 
-**Ready to contribute?** Check out the [open issues](https://github.com/yourusername/CodingBuddy/issues) or propose new features!
+**Ready to contribute?** Check out the [open issues](https://github.com/skizap/CodingBuddy/issues) or propose new features!

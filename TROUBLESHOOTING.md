@@ -14,6 +14,7 @@ cd /path/to/CodingBuddy
 This will check:
 - Geany and GeanyLua installation
 - Lua dependencies (lua-socket, luasec, dkjson)
+- System tool dependencies (openssl, patch, diff, ripgrep)
 - CodingBuddy plugin files and permissions
 - Configuration file validity
 - Log directories and recent errors
@@ -116,6 +117,51 @@ ping openrouter.ai
 - **File permissions:** Fix with `chmod -R 755 ~/.config/geany/plugins/geanylua/codingbuddy/`
 - **Directory permissions:** Ensure ~/.config/geany exists and is writable
 - **SELinux/AppArmor:** Check security policies if on enterprise Linux
+
+### 6. "System tool not found" errors
+
+**Symptoms:** Errors about missing openssl, patch, diff, or ripgrep
+
+**System Tool Dependencies:**
+CodingBuddy uses these system tools for advanced features:
+
+#### OpenSSL (Required for conversation encryption)
+```bash
+# Test if available
+openssl version
+
+# Install if missing
+sudo apt install openssl         # Ubuntu/Debian
+sudo yum install openssl         # CentOS/RHEL
+brew install openssl             # macOS
+```
+
+#### patch and diff (Required for code patching)
+```bash
+# Test if available
+which patch && which diff
+
+# Install if missing (usually pre-installed on most systems)
+sudo apt install patch diffutils # Ubuntu/Debian
+sudo yum install patch diffutils # CentOS/RHEL
+# macOS: Usually pre-installed with Xcode Command Line Tools
+```
+
+#### ripgrep (Optional, improves code search performance)
+```bash
+# Test if available
+rg --version
+
+# Install if missing
+sudo apt install ripgrep         # Ubuntu/Debian 19.04+
+brew install ripgrep             # macOS
+# Or download from: https://github.com/BurntSushi/ripgrep/releases
+```
+
+**Feature Impact:**
+- **Missing OpenSSL:** Conversation encryption will be unavailable
+- **Missing patch/diff:** AI code modifications will use fallback methods
+- **Missing ripgrep:** Code search will use slower grep fallback
 
 ## 📊 Debug Logging
 

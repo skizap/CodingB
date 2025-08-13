@@ -19,6 +19,8 @@ License: MIT
 local path = require('tools.path')
 local fs = require('tools.fs')
 local terminal = require('tools.terminal')
+local editor = require('tools.editor')
+local run_lint = require('tools.run_lint')
 -- local patch = require('tools.patch') -- TODO: Implement patch module
 
 local M = {}
@@ -215,6 +217,58 @@ M.registry = {
     end
   },
 
+  -- Editor operations
+  open_in_editor = {
+    description = 'Open a file in the active Geany editor buffer',
+    input_schema = {
+      type = 'object',
+      properties = {
+        rel_path = {
+          type = 'string',
+          description = 'Relative path to the file to open in the editor'
+        }
+      },
+      required = { 'rel_path' }
+    },
+    handler = function(args)
+      -- Check if editor is available
+      if not editor.is_available() then
+        return { error = 'Geany editor interface is not available' }
+      end
+      
+      -- Validate and resolve path
+      local abs, err = path.to_abs(args.rel_path)
+      if not abs then 
+        return { error = 'Path resolution failed: ' .. (err or 'unknown error') }
+      end
+      
+      -- Ensure path is within sandbox boundaries
+      local ok, err2 = path.ensure_in_sandbox(abs)
+      if not ok then 
+        return { error = 'Sandbox violation: ' .. (err2 or 'path outside sandbox') }
+      end
+      
+      -- Read the file content
+      local content, rerr = fs.read_file(abs)
+      if not content then 
+        return { error = 'Failed to read file: ' .. (rerr or 'unknown error') }
+      end
+      
+      -- Set the buffer text in the editor
+      local success = editor.set_buffer_text(content)
+      if not success then
+        return { error = 'Failed to set buffer text in editor' }
+      end
+      
+      return { 
+        ok = true, 
+        path = abs, 
+        chars_loaded = string.len(content),
+        editor_status = editor.get_status()
+      }
+    end
+  },
+
   -- Patch operations for code modification (TODO: Implement patch module)
   --[[
   generate_diff = {
@@ -366,5 +420,8 @@ function M.validate_registry()
   
   return #errors == 0, errors
 end
+
+-- Initialize additional tools
+run_lint.register(M.registry)
 
 return M

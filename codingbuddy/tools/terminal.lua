@@ -7,7 +7,7 @@ local M = {}
 local function get_policy()
   local cfg = config.get()
   return {
-    allow = cfg.terminal_allow or { 'ls', 'rg', 'grep', 'sed', 'awk', 'python', 'lua', 'bash', 'sh', 'node', 'npm' },
+    allow = cfg.terminal_allow or { 'ls', 'rg', 'grep', 'sed', 'awk', 'python', 'lua', 'bash', 'sh', 'node', 'npm', 'flake8', 'ruff', 'luacheck', 'eslint', 'which' },
     deny = cfg.terminal_deny or { 'rm -rf', 'shutdown', 'reboot', 'mkfs', 'dd if=', 'cryptsetup', 'sudo ' }
   }
 end

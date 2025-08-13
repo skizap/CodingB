@@ -147,6 +147,10 @@ function M.chat(opts)
         ['Content-Type'] = 'application/json',
         ['Authorization'] = 'Bearer '..(cfg.deepseek_api_key or '')
       }
+    elseif p == 'ollama' then
+      return 'http://localhost:11434/api/chat', {
+        ['Content-Type'] = 'application/json'
+      }
     end
   end
 
@@ -171,7 +175,17 @@ function M.chat(opts)
       end
     end
     
-    if actual_provider == 'anthropic' then
+    if p == 'ollama' then
+      -- Ollama payload format
+      local m = opts.model or cfg.provider_models.ollama or 'llama3.1'
+      return {
+        model = m,
+        messages = opts.messages or {
+          { role = 'user', content = opts.prompt or '' }
+        },
+        stream = false
+      }
+    elseif actual_provider == 'anthropic' then
       local m = model_override or opts.model or cfg.provider_models.anthropic
       local sys = (opts.system ~= nil) and opts.system or default_system
       local pl = {
@@ -330,9 +344,11 @@ function M.chat(opts)
     local entry = {
       timestamp = os.date('!%Y-%m-%dT%H:%M:%SZ'),
       provider = p,
-      model = model,
-      usage = usage,
-      cost = cost,
+      model = tostring(model or 'unknown'),
+      prompt_tokens = usage.prompt_tokens or 0,
+      completion_tokens = usage.completion_tokens or 0,
+      total_tokens = usage.total_tokens or 0,
+      estimated_cost = cost or 0,
       currency = (cfg.cost and cfg.cost.currency) or 'USD'
     }
     local ok, dkjson = pcall(require, 'dkjson')
@@ -340,18 +356,28 @@ function M.chat(opts)
     if ok and dkjson then
       line = dkjson.encode(entry)
     else
-      line = string.format('{"timestamp":"%s","provider":"%s","model":"%s","prompt_tokens":%d,"completion_tokens":%d,"total_tokens":%d,"cost":%.6f}',
-        entry.timestamp, p, tostring(model), usage.prompt_tokens or 0, usage.completion_tokens or 0, usage.total_tokens or 0, cost or 0)
+      line = string.format('{"timestamp":"%s","provider":"%s","model":"%s","prompt_tokens":%d,"completion_tokens":%d,"total_tokens":%d,"estimated_cost":%.6f,"currency":"%s"}',
+        entry.timestamp, entry.provider, entry.model, entry.prompt_tokens, entry.completion_tokens, entry.total_tokens, entry.estimated_cost, entry.currency)
     end
     local home = os.getenv('HOME') or '.'
     local log_path = home..'/.config/geany/plugins/geanylua/codingbuddy/logs/usage.jsonl'
+    
+    -- Ensure logs directory exists
+    local logs_dir = home..'/.config/geany/plugins/geanylua/codingbuddy/logs'
+    os.execute('mkdir -p "' .. logs_dir .. '"')
+    
     local f = io.open(log_path, 'a')
     if f then f:write(line..'\n'); f:close() end
   end
 
   -- Extract structured response with text and tool calls
   local function extract_response(p, obj)
-    if p == 'anthropic' then
+    if p == 'ollama' then
+      -- Ollama response format: extract response.message.content
+      local message_content = obj and obj.message and obj.message.content
+      local result = { text = message_content, tool_calls = {}, raw_content = obj }
+      return result
+    elseif p == 'anthropic' then
       local content = obj and obj.content
       local result = { text = nil, tool_calls = {}, raw_content = content }
 
@@ -428,8 +454,11 @@ function M.chat(opts)
 
   local function try_provider(p, conversation_messages)
     local url, headers = build_url_and_headers(p)
-    if (p == 'openrouter' and not cfg.openrouter_api_key) or (p == 'openai' and not cfg.openai_api_key) or (p == 'anthropic' and not cfg.anthropic_api_key) then
-      return nil, 'Missing API key for '..p
+    -- Skip API key validation for local providers like Ollama
+    if p ~= 'ollama' then
+      if (p == 'openrouter' and not cfg.openrouter_api_key) or (p == 'openai' and not cfg.openai_api_key) or (p == 'anthropic' and not cfg.anthropic_api_key) or (p == 'deepseek' and not cfg.deepseek_api_key) then
+        return nil, 'Missing API key for '..p
+      end
     end
 
     local payload = build_payload(p)

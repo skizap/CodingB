@@ -67,6 +67,12 @@ Your message: [Input dialog appears here]
 | `/history` | View recent conversations | `/history` |
 | `/quit` or `/exit` | Close chat interface | `/quit` |
 | `/help` | Show available commands | `/help` |
+| `/task start` | Enable task mode (operations require approval) | `/task start` |
+| `/task stop` | Disable task mode (operations execute normally) | `/task stop` |
+| `/ops` | Show pending operations queue | `/ops` |
+| `/approve <id>` | Approve operation by ID for execution | `/approve 1` |
+| `/reject <id>` | Reject operation by ID (removes from queue) | `/reject 2` |
+| `/clear` | Clear all completed operations | `/clear` |
 
 ### Conversation Flow
 
@@ -285,6 +291,98 @@ CodingBuddy maintains context across:
 - **Current conversation** - Full message history
 - **Current file** - Understands what you're working on
 - **Project context** - Learns from your coding patterns
+
+### Task Mode and Approvals
+
+Task mode provides a safety mechanism for AI operations that modify files or execute commands:
+
+#### Enabling Task Mode
+```
+User: /task start
+System: Task mode enabled. AI requests for file operations will require approval.
+```
+
+#### Workflow Example
+```
+User: Create a hello world script in Python
+AI: I'll create a Python hello world script for you.
+
+Operation 1 (write_file) has been queued for approval. Use /approve 1 to execute or /reject 1 to cancel.
+
+User: /ops
+Operations Queue:
+[10:30] ID:1 write_file - Write to: hello.py (PENDING)
+
+User: /approve 1
+System: Approved operation 1
+
+User: Thanks!
+System: Executed approved operations:
+- Operation 1 (write_file): Success
+```
+
+#### Operations That Require Approval
+When task mode is enabled, these operations are queued for approval:
+- **write_file** - Writing content to files
+- **apply_patch** - Applying code patches
+- **run_command** - Executing terminal commands
+
+Read-only operations (read_file, list_dir, search_code) continue normally.
+
+#### Task Mode Commands
+- `/task start` - Enable task mode
+- `/task stop` - Disable task mode
+- `/ops` - Show pending operations queue
+- `/approve <id>` - Approve operation by ID
+- `/reject <id>` - Reject operation by ID
+- `/clear` - Clear completed operations
+
+### Conversation Encryption
+
+Protect your conversation history with AES-256-CBC encryption:
+
+#### Setup Steps
+
+1. **Install OpenSSL** (required for encryption):
+   ```bash
+   sudo apt install openssl  # Ubuntu/Debian
+   brew install openssl      # macOS
+   ```
+
+2. **Set encryption passphrase**:
+   ```bash
+   export CODINGBUDDY_PASSPHRASE="your-very-secure-passphrase-here"
+   # Add to ~/.bashrc or ~/.zshrc to persist across sessions
+   ```
+
+3. **Enable encryption in config**:
+   ```json
+   {
+     "conversation_encryption": true,
+     // ... other settings
+   }
+   ```
+
+#### How It Works
+- **New conversations** are automatically encrypted when saved
+- **Existing conversations** remain in their current format until modified
+- **Loading** automatically detects and handles both encrypted and unencrypted files
+- **File extensions** distinguish formats: `.json` (unencrypted) vs `.json.enc` (encrypted)
+
+#### Security Features
+- **AES-256-CBC** encryption with PBKDF2 key derivation
+- **100,000 iterations** for resistance against rainbow table attacks
+- **Random salt** per file prevents identical plaintext producing identical ciphertext
+- **Secure passphrase handling** via environment variables only
+
+#### Important Security Notes
+- Use a strong 20+ character passphrase with mixed case, numbers, and symbols
+- Never store the passphrase in config files or version control
+- If you lose your passphrase, encrypted conversations **cannot be recovered**
+- Test decryption periodically to ensure your setup works
+- Consider using a password manager to generate and store the passphrase
+
+For detailed encryption information, see [ENCRYPTION.md](ENCRYPTION.md).
 
 ## Tips and Best Practices
 
